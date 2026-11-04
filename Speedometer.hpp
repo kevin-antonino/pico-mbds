@@ -4,38 +4,38 @@
 #include "hardware/gpio.h"
 
 typedef struct {
-    bool count{0};
-    bool delta_count{0};
+    int count{0};
     uint64_t timestamp_us{0};
-} QuadratureReading;
+} QuadratureSample;
 
 typedef struct {
     uint encoder_AB_pin;
-    uint8_t encoder_number;
+    const uint encoder_number;
     PIO pio_block;
-} SpeedometerConfig;
+} QuadratureEncoderConfig;
 
-class Speedometer{
+class QuadratureEncoder{
     public:
-        Speedometer(const SpeedometerConfig& config);
-        void initialize() const;
-        float calculate_wheel_speed();
+        QuadratureEncoder(const QuadratureEncoderConfig& config);
+        void initialize();
+        void execute();
+        float get_wheel_speed const();
         
     private:
-        // Harware specific constants
+        // Harware specific constants and offline calculations 
         static constexpr uint32_t ENCODER_COUNTS_PER_REV = 12;
         static constexpr float GEAR_RATIO = 119.757575;
-
-        // Offline Calculations
         static constexpr float PI = 3.14159265;
-        static constexpr float COUNTS_TO_RAD = 2.0f * PI / ENCODER_COUNTS_PER_REV;
+        static constexpr float ENCODER_COUNTS_TO_WHEEL_RAD = 2.0f * PI / ENCODER_COUNTS_PER_REV * GEAR_RATIO;
 
         // Config-specific constants
         const uint encoder_AB_pin_;
+        const uint encoder_number;
+        PIO pio_block_;
 
         // Variables
-        QuadratureReading reading_;
-        QuadratureReading prev_reading_;
+        QuadratureSample prev_sample_;
+        QuadratureSample current_sample_;
         float wheel_speed_radps_{0.0f};
 };
 
