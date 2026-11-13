@@ -13,14 +13,15 @@
 
 typedef struct {
     uint encoder_AB_pin;
-    const uint encoder_number;
-    PIO pio_block;
+    uint calibration_data[4]; // relative phase sizes
 } QuadratureEncoderConfig;
 
-// substep_state_t type from RP Pico Examples
-typedef struct substep_state_t {
-    // configuration data:
-    uint calibration_data[4]; // relative phase sizes
+// substep_state to handle RP examples code
+typedef struct substep_state_t { 
+    // output of the encoder execute function:
+    int speed_substepps;     // estimated speed in substeps per second
+    uint pos_substep;        // estimated position in substeps
+    uint substep_count;      // raw step count
 
     // internal fields to keep track of the previous state:
     uint prev_trans_pos, prev_trans_us;
@@ -29,12 +30,6 @@ typedef struct substep_state_t {
     uint idle_stop_sample_count;
     int speed_2_20;
     int stopped;
-
-    // output of the encoder update function:
-    int speed;     // estimated speed in substeps per second
-    uint position; // estimated position in substeps
-
-    uint raw_step; // raw step count
 } substep_state_t;
 
 class QuadratureEncoder{
@@ -46,7 +41,6 @@ class QuadratureEncoder{
         
     private:
         static uint n_encoders_{}; // Increments for each constructor called (decrements when destroyed)
-
         substep_state_t state_{}; // Make sure these are all zeros
         uint encoder_number_{}; // Unique to each instance
         PIO pio_block_{};
@@ -57,14 +51,12 @@ class QuadratureEncoder{
         // Harware specific constants and offline calculations 
         static constexpr uint32_t ENCODER_COUNTS_PER_REV = 12;
         static constexpr float GEAR_RATIO = 119.757575;
-
-        // Static constants for code
         static constexpr float ENCODER_COUNTS_TO_WHEEL_RAD = 2.0f * 3.14159265f / ENCODER_COUNTS_PER_REV * GEAR_RATIO;
         static constexpr uint IDLE_STOP_SAMPLES = 3;
 
         // Config-specific values
         uint encoder_AB_pin_; 
-
+        uint calibration_data_[4]; // relative phase sizes
 };
 
 #endif
