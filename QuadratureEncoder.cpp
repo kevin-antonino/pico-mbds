@@ -1,128 +1,104 @@
-#include QuadratureEncoder.hpp
+#include "QuadratureEncoder.hpp"
+#include "quadrature_encoder_substep.pio.h"
+#include "hardware/clocks.h"
+#include "hardware/gpio.h"
+#include "hardware/sync.h"
 
 QuadratureEncoder::QuadratureEncoder(const QuadratureEncoderConfig& config){
-    // Put configuration checks in here
-    // AB must be a GPIO / eligable pin
-    // Encoder number MUST be 0-3
-    // PIO Block has to be either PIO0 or PIO1 
-    
     // Get unique encoder number (0-3)
-    num_encoders_++;
-    encoder_number_ = num_encoders_ - 1; // Zero indexed 
+    n_encoders_++;
+    encoder_number_ = n_encoders_ - 1; // Zero indexed 
+
+    // Handle calibration data
+    encoder_AB_pin_ = config.encoder_AB_pin;
+    for (int i{}; i < 4; ++i){
+        state_.calibration_data[i] = config.calibration_data[i];
+    }
+}
+
+EncoderStatus QuadratureEncoder::initialize() {
+    int forward;
+
+    // Figure out which state machine to use
     state_machine_ = encoder_number_ % 4; 
+
+    // Figure out which PIO block to use
+    if (encoder_number_ < 4){
+        pio_block_ = pio0;
+    } else if (encoder_number_ < 8){
+        pio_block_ = pio1;
+    } else {
+        return TooManyEncoders;
+    }
+    
+    // Claim PIO Block & state_machines if unclaimed
+    // TODO: No check to see if program loaded right
+    if (pio_can_add_program(pio_block_, &quadrature_encoder_substep_program)){
+        pio_add_program(pio_block_, &quadrature_encoder_substep_program);
+        for (int i = 0; i < 4; i++){
+            if (!pio_sm_is_claimed(pio_block_, i)){
+                // claim all SMs to be used by this program
+                pio_sm_claim(pio_block_, i);
+            } else {
+                return NoStateMachine;
+            }
+        }
+    }
+
+    // TODO: at check for pin in some range
     
     // start "stopped" so that we don't use stale data to compute speeds
     state_.stopped = 1;
-    
-    // start with equal phase size calibration
-    calibration_data_[0] = 0;
-    calibration_data_[1] = 64;
-    calibration_data_[2] = 128;
-    calibration_data_[3] = 192;
-    
+
     // cache the PIO cycles per us
     clock_cycles_per_us_ = (clock_get_hz(clk_sys) + 500000) / 1000000;
-}
 
-    void initialize() {
-        // Figure out which PIO block to use
-        if (encoder_number_ < 4){
-            pio_block_ = pio0;
-        } else if (encoder_number_ < 8){
-            pio_block_ = pio1;
-        } else {
-            // raise an error
-        }
-        
-        // Claim PIO Block & state machines if unclaimed
-        if (pio_can_add_program(pio_block_, &pico_encoder_program)){
-            pio_add_program(pio_block_, &pico_encoder_program);
-            for (int i = 0; i < 4; i++){
-                if (!pio_sm_is_claimed(pio_block_, i)){
-                    // claim all SMs to be used by this program
-                    pio_sm_claim(pio_block_, i);
-                } else {
-                    // raise an Error
-                }
-            }
-        }
-        
-        // initialize PIO program using this encoder's state machine
-        quadrature_encoder_substep_program_init(pio_block_, state_machine_, pin_a);
-        
-        // initialize the previous state
-        read_pio_data(&state_.substep_count, &state.prev_step_us, &state.prev_trans_us, &forward);
-        state_.pos_substep = get_step_start_transition_pos(state_, state_.substep_count) + 32;
-    }
+    // initialize PIO program using this encoder's state_machine
+    quadrature_encoder_substep_program_init(pio_block_, state_machine_, encoder_AB_pin_);
     
-void read_pio_data(uint *step, uint *step_us, uint *transition_us, int *forward) {
-    int cycles;
+    // initialize the previous state
+    read_pio_data(&state_.raw_step, &state_.prev_step_us, &state_.prev_trans_us, &forward);
+    state_.pos_substep = get_step_start_transition_pos(state_.raw_step) + 32;
 
-    // get the raw data from the PIO state machine
-    quadrature_encoder_substep_get_counts(&pio_block_, &state_machine_, step, &cycles, step_us);
-
-    // when the PIO program detects a transition, it sets cycles to either zero
-    // (when step is incrementing) or 2^31 (when step is decrementing) and keeps
-    // decrementing it on each 13 clock loop. We can use this information to get
-    // the time and direction of the last transition
-    if (cycles < 0) {
-        cycles = -cycles;
-        *forward = 1;
-    } else {
-        cycles = 0x80000000 - cycles;
-        *forward = 0;
-    }
-    *transition_us = *step_us - ((cycles * 13) / clock_cycles_per_us_);
+    return Ready;
 }
-
-// get the sub-step position of the start of a step
-uint get_step_start_transition_pos(uint step) {
-    return ((step << 6) & 0xFFFFFF00) | state_.calibration_data[step & 3];
-}
-
-// compute speed in "sub-steps per 2^20 us" from a delta substep position and
-// delta time in microseconds. This unit is cheaper to compute and use, so we
-// only convert to "sub-steps per second" once per update, at most
-static int substep_calc_speed(int delta_substep, int delta_us) {
-    return ((int64_t) delta_substep << 20) / delta_us;
-} 
 
 // read the PIO data and update the speed / position estimate
-// This is basically substep_update() in the example
-void execute() {
-    uint new_substep_count, step_us, transition_us, transition_pos, low, high;
+// This is basically substep_update() in the example code
+void QuadratureEncoder::execute() {
+    uint new_raw_step, step_us, transition_us, transition_pos, low, high;
     int forward, speed_high, speed_low;
 
-    // read the current encoder state from the PIO
-    read_pio_data(&new_substep_count, &step_us, &transition_us, &forward);
+    // read the current encoder state_from the PIO
+    read_pio_data(&new_raw_step, &step_us, &transition_us, &forward);
 
     // from the current step we can get the low and high boundaries in substeps
     // of the current position
-    low = get_step_start_transition_pos(new_substep_count);
-    high = get_step_start_transition_pos(new_substep_count + 1);
+    low = get_step_start_transition_pos(new_raw_step);
+    high = get_step_start_transition_pos(new_raw_step + 1);
 
     // if we were not stopped, but the last transition was more than
     // "idle_stop_samples" ago, we are stopped now
-    if (new_substep_count == state_.substep_count)
+    if (new_raw_step == state_.raw_step)
         state_.idle_stop_sample_count++;
     else
         state_.idle_stop_sample_count = 0;
 
-    if (!state_.stopped && state.idle_stop_sample_count >= IDLE_STOP_SAMPLES) {
-        state_.speed = 0;
+    if (!state_.stopped && state_.idle_stop_sample_count >= IDLE_STOP_SAMPLES) {
+        wheel_speed_radps_ = 0;
         state_.speed_2_20 = 0;
         state_.stopped = 1;
     }
 
     // when we are at a different step now, there is certainly a transition
-    if (state_.substep_count != new_substep_count) {
+    if (state_.raw_step != new_raw_step) {
         // the transition position depends on the direction of the move
         transition_pos = forward ? low : high;
 
         // if we are not stopped, that means there is valid previous transition
         // we can use to estimate the current speed
         if (!state_.stopped)
-            state_.speed_2_20 = substep_calc_speed(transition_pos - state.prev_trans_pos, transition_us - state.prev_trans_us);
+            state_.speed_2_20 = substep_calc_speed(transition_pos - state_.prev_trans_pos, transition_us - state_.prev_trans_us);
 
         // if we have a transition, we are not stopped now
         state_.stopped = 0;
@@ -150,10 +126,10 @@ void execute() {
         // transition is closer to now than the previous sample time, we should
         // use the slopes from the last sample to the transition as these will
         // have less numerical issues and produce a tighter boundary
-        if (state_.prev_trans_us > state.prev_step_us && 
-            (int)(state_.prev_trans_us - state.prev_step_us) > (int)(step_us - state.prev_trans_us)) {
-            speed_high = substep_calc_speed(state_.prev_trans_pos - state_.prev_low, state.prev_trans_us - state_.prev_step_us);
-            speed_low = substep_calc_speed(state_.prev_trans_pos - state_.prev_high, state.prev_trans_us - state_.prev_step_us);
+        if (state_.prev_trans_us > state_.prev_step_us && 
+            (int)(state_.prev_trans_us - state_.prev_step_us) > (int)(step_us - state_.prev_trans_us)) {
+            speed_high = substep_calc_speed(state_.prev_trans_pos - state_.prev_low, state_.prev_trans_us - state_.prev_step_us);
+            speed_low = substep_calc_speed(state_.prev_trans_pos - state_.prev_high, state_.prev_trans_us - state_.prev_step_us);
         } else {
             // otherwise use the slopes from the last transition to now
             speed_high = substep_calc_speed(high - state_.prev_trans_pos, step_us - state_.prev_trans_us);
@@ -168,11 +144,14 @@ void execute() {
 
         // convert the speed units from "sub-steps per 2^20 us" to "sub-steps
         // per second"
-        state_.speed = (state.speed_2_20 * 62500LL) >> 16;
+        const float speed_substepps = static_cast<float>((state_.speed_2_20 * 62500LL) >> 16);
+        
+        // convert from substeps / sec to rad / s
+        wheel_speed_radps_ = (invert_ ? -1.0f : 1.0f) * speed_substepps * ENCODER_COUNTS_TO_WHEEL_RAD;
 
         // estimate the current position by applying the speed estimate to the
         // most recent transition
-        state_.pos_substep = state.prev_trans_pos + (((int64_t)state.speed_2_20 * (step_us - transition_us)) >> 20);
+        state_.pos_substep = state_.prev_trans_pos + (((int64_t)state_.speed_2_20 * (step_us - transition_us)) >> 20);
 
         // make sure the position estimate is between "low" and "high", as we
         // can be sure the actual current position must be in this range
@@ -185,7 +164,40 @@ void execute() {
     // save the current values to use on the next sample
     state_.prev_low = low;
     state_.prev_high = high;
-    state_.substep_count = new_substep_count;
+    state_.raw_step = new_raw_step;
     state_.prev_step_us = step_us;
 }
 
+
+// Helper functions from quadrature_encoder_substep in pico-examples
+void QuadratureEncoder::read_pio_data(uint *step, uint *step_us, uint *transition_us, int *forward) {
+    int cycles;
+
+    // get the raw data from the PIO state_machine
+    quadrature_encoder_substep_get_counts(pio_block_, state_machine_, step, &cycles, step_us);
+
+    // when the PIO program detects a transition, it sets cycles to either zero
+    // (when step is incrementing) or 2^31 (when step is decrementing) and keeps
+    // decrementing it on each 13 clock loop. We can use this information to get
+    // the time and direction of the last transition
+    if (cycles < 0) {
+        cycles = -cycles;
+        *forward = 1;
+    } else {
+        cycles = 0x80000000 - cycles;
+        *forward = 0;
+    }
+    *transition_us = *step_us - ((cycles * 13) / clock_cycles_per_us_);
+}
+
+// get the sub-step position of the start of a step
+uint QuadratureEncoder::get_step_start_transition_pos(uint step) const {
+    return ((step << 6) & 0xFFFFFF00) | state_.calibration_data[step & 3];
+}
+
+// compute speed in "sub-steps per 2^20 us" from a delta substep position and
+// delta time in microseconds. This unit is cheaper to compute and use, so we
+// only convert to "sub-steps per second" once per update, at most
+int QuadratureEncoder::substep_calc_speed(int delta_substep, int delta_us) const {
+    return ((int64_t) delta_substep << 20) / delta_us;
+} 
