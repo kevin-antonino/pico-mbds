@@ -8,6 +8,7 @@ QuadratureEncoder::QuadratureEncoder(const QuadratureEncoderConfig& config){
     // Get unique encoder number (0-3)
     n_encoders_++;
     encoder_number_ = n_encoders_ - 1; // Zero indexed 
+    invert_ = config.invert;
 
     // Handle calibration data
     encoder_AB_pin_ = config.encoder_AB_pin;
@@ -28,7 +29,7 @@ EncoderStatus QuadratureEncoder::initialize() {
     } else if (encoder_number_ < 8){
         pio_block_ = pio1;
     } else {
-        return TooManyEncoders;
+        return EncoderStatus::TooManyEncoders;
     }
     
     // Claim PIO Block & state_machines if unclaimed
@@ -40,7 +41,7 @@ EncoderStatus QuadratureEncoder::initialize() {
                 // claim all SMs to be used by this program
                 pio_sm_claim(pio_block_, i);
             } else {
-                return NoStateMachine;
+                return EncoderStatus::NoStateMachine;
             }
         }
     }
@@ -60,7 +61,7 @@ EncoderStatus QuadratureEncoder::initialize() {
     read_pio_data(&state_.raw_step, &state_.prev_step_us, &state_.prev_trans_us, &forward);
     state_.pos_substep = get_step_start_transition_pos(state_.raw_step) + 32;
 
-    return Ready;
+    return EncoderStatus::Ready;
 }
 
 // read the PIO data and update the speed / position estimate
@@ -147,7 +148,7 @@ void QuadratureEncoder::execute() {
         const float speed_substepps = static_cast<float>((state_.speed_2_20 * 62500LL) >> 16);
         
         // convert from substeps / sec to rad / s
-        wheel_speed_radps_ = (invert_ ? -1.0f : 1.0f) * speed_substepps * ENCODER_COUNTS_TO_WHEEL_RAD;
+        wheel_speed_radps_ = (invert_ ? -1.0f : 1.0f) * speed_substepps * SUBSTEPS_TO_WHEEL_RAD;
 
         // estimate the current position by applying the speed estimate to the
         // most recent transition

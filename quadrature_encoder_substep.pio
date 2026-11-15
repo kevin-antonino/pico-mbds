@@ -151,10 +151,11 @@ static inline void quadrature_encoder_substep_program_init(PIO pio, uint sm, uin
 	// always run at sysclk, to have the maximum possible time resolution
 	sm_config_set_clkdiv(&c, 1.0);
 
+	sm_config_set_mov_status(&c, STATUS_RX_LESSTHAN, 2);
 	pio_sm_init(pio, sm, 0, &c);
-
+	
 	// set up status to be rx_fifo < 1
-	pio->sm[sm].execctrl = ((pio->sm[sm].execctrl & 0xFFFFFF80) | 0x12);
+	//pio->sm[sm].execctrl = ((pio->sm[sm].execctrl & 0xFFFFFF80) | 0x12); // breaks on RP2350
 
 	// init the state machine according to the current phase. Since we are
 	// setting the state running PIO instructions from C state, the encoder may
