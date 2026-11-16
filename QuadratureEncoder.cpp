@@ -5,12 +5,11 @@
 #include "hardware/sync.h"
 
 QuadratureEncoder::QuadratureEncoder(const QuadratureEncoderConfig& config){
-    // Get unique encoder number (0-3)
     n_encoders_++;
     encoder_number_ = n_encoders_ - 1; // Zero indexed 
-    invert_ = config.invert;
 
-    // Handle calibration data
+    // Handle configuration data
+    invert_ = config.invert;
     encoder_AB_pin_ = config.encoder_AB_pin;
     for (int i{}; i < 4; ++i){
         state_.calibration_data[i] = config.calibration_data[i];
@@ -29,7 +28,7 @@ EncoderStatus QuadratureEncoder::initialize() {
     } else if (encoder_number_ < 8){
         pio_block_ = pio1;
     } else {
-        return EncoderStatus::TooManyEncoders;
+        return EncoderStatus::TOO_MANY_ENCODERS;
     }
     
     // Claim PIO Block & state_machines if unclaimed
@@ -41,7 +40,7 @@ EncoderStatus QuadratureEncoder::initialize() {
                 // claim all SMs to be used by this program
                 pio_sm_claim(pio_block_, i);
             } else {
-                return EncoderStatus::NoStateMachine;
+                return EncoderStatus::NO_STATE_MACHINE;
             }
         }
     }
@@ -60,8 +59,10 @@ EncoderStatus QuadratureEncoder::initialize() {
     // initialize the previous state
     read_pio_data(&state_.raw_step, &state_.prev_step_us, &state_.prev_trans_us, &forward);
     state_.pos_substep = get_step_start_transition_pos(state_.raw_step) + 32;
+    state_.prev_low = get_step_start_transition_pos(state_.raw_step);
+    state_.prev_high = get_step_start_transition_pos(state_.raw_step + 1);
 
-    return EncoderStatus::Ready;
+    return EncoderStatus::READY;
 }
 
 // read the PIO data and update the speed / position estimate

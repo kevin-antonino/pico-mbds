@@ -6,7 +6,7 @@
 #include "hardware/pio.h"
 #include "hardware/timer.h"
 
-enum class EncoderStatus {Ready, TooManyEncoders, NoStateMachine, BadPin};
+enum class EncoderStatus {READY, TOO_MANY_ENCODERS, NO_STATE_MACHINE, BAD_PIN};
 
 typedef struct {
     uint encoder_AB_pin; // Location of Pin A. Pin B = Pin A + 1
