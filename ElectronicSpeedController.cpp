@@ -2,33 +2,40 @@
 
 ElectronicSpeedController::ElectronicSpeedController(const ElectronicSpeedControllerConfig& config){
     pwm_pin_ = config.pwm_pin;
+    dir_pin_ = config.dir_pin;
 }
 
-ElectronicSpeedController::initialize(){
-    EncoderStatus status = encoder_.initialize();
-    if (status == EncoderStatus::READY){
-        mode_ = ControllerMode::ACTIVE;
+ ControllerInitStatus ElectronicSpeedController::initialize(){
+    EncoderStatus encoder_status = encoder_.initialize();
+    if (status != EncoderStatus::READY){
+        return ControllerInitStatus::BAD_ENCODER;
+    } else if (dir_pin_ < 0) || (pwm_pin_ < 0) || 
+        (dir_pin_ > 28) || (pwm_pin_ > 28){
+        return ControllerInitStatus::BAD_CONFIG;
     }
 
+    // init direction Pin
+    gpio_init(dir_pin_);
+    gpio_set_dir(dir_pin_, true);
+
     // init PWM Pin
-    gpio_init(pwm_pin_);
-    gpio_set_dir(pwm_pin_, true);
-    
-    // Handle pwm_config
     pwm_config cfg = pwm_get_default_config();
     pwm_config_set_clkdiv_int(&cfg, 1);
     pwm_config_set_wrap(&cfg, PWM_COUNTS_PER_CYCLE);
     pwm_init(pwm_gpio_to_slice_num(pwm_pin_), &cfg, true);
     gpio_set_function(pwm_pin_, GPIO_FUNC_PWM);
 
-    // Set level (0)
-    set_pwm_output();
+    // Set level and mode
+    write_output_pins();
+    mode_ = ControllerMode::ACTIVE;
+
+    return ControllerInitStatus::READY;
 }
 
 void ElectronicSpeedController::execute(){
     encoder_.execute();
     if (mode_ == ControllerMode::ACTIVE){
-        generate_pwm_command();
+        calculate_pwm_and_direction();
         apply_limits();
     } else if (mode_ == ControllerMode::LOCKOUT){
         n_frames_lockout_++;
@@ -38,14 +45,16 @@ void ElectronicSpeedController::execute(){
             mode_ = ControllerMode::ACTIVE;
         }
     }
-    set_pwm_output();
+    write_output_pins();
 }
 
-void ElectronicSpeedController::generate_pwm_command(){
+void ElectronicSpeedController::calculate_pwm_and_direction(){
+    const float motor_cmd_V, duty;
     error_ = speed_cmd_radps_ - encoder_.get_wheel_speed();
-    const float motor_cmd_V = KP*error_ + KI*error_int_ + KFF*speed_cmd_radps_;
-    direction_ = (motor_cmd_V < 0.0f) ? -1 : 1;
-    pwm_cmd_ = static_cast<uint>(fabsf(motor_cmd_V) / SUPPLY_VOLTAGE_V * PWM_COUNTS_PER_CYCLE);
+    motor_cmd_V = KP*error_ + KI*error_int_ + KFF*speed_cmd_radps_;
+    duty = fminf(fabsf(motor_cmd_V) / SUPPLY_VOLTAGE_V, 1.0f);
+    direction_ = (motor_cmd_V < 0.0f) ? 0 : 1;
+    pwm_cmd_ = static_cast<uint>(duty * PWM_COUNTS_PER_CYCLE);
 }
 
 void ElectronicSpeedController::apply_limits(){
@@ -69,8 +78,10 @@ void ElectronicSpeedController::set_speed_command(float cmd){
     } else {
         speed_cmd_radps_ = cmd;
     }
+    // put a rate limit here?
 }
 
-void ElectronicSpeedController::set_pwm_output(){
+void ElectronicSpeedController::write_output_pins(){
+    gpio_put(dir_pin_, direction_);
     pwm_set_gpio_level(pwm_pin_, pwm_cmd_);
 }

@@ -6,7 +6,7 @@
 #include "hardware/pio.h"
 #include "hardware/timer.h"
 
-enum class EncoderStatus {READY, TOO_MANY_ENCODERS, NO_STATE_MACHINE, BAD_PIN};
+enum class EncoderInitStatus {READY, TOO_MANY_ENCODERS, NO_STATE_MACHINE, BAD_PIN};
 
 typedef struct {
     uint encoder_AB_pin; // Location of Pin A. Pin B = Pin A + 1
@@ -35,7 +35,7 @@ typedef struct substep_state_t {
 class QuadratureEncoder{
     public:
         QuadratureEncoder(const QuadratureEncoderConfig& config);
-        EncoderStatus initialize();
+        EncoderInitStatus initialize();
         void execute();
         float get_wheel_speed() const { return wheel_speed_radps_; }
         substep_state_t get_state() const { return state_; }

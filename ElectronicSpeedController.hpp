@@ -1,6 +1,7 @@
 #include "QuadratureEncoder.hpp"
 
 class enum ControllerMode{ACTIVE, INACTIVE, LOCKOUT};
+class enum ControllerInitStatus{READY, BAD_ENCODER, BAD_CONFIG};
 
 class ElectronicSpeedController{
     public:
