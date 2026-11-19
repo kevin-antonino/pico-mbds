@@ -5,13 +5,13 @@ ElectronicSpeedController::ElectronicSpeedController(const ElectronicSpeedContro
     dir_pin_ = config.dir_pin;
 }
 
- ControllerInitStatus ElectronicSpeedController::initialize(){
+ ElectronicSpeedControllerInitStatus ElectronicSpeedController::initialize(){
     EncoderStatus encoder_status = encoder_.initialize();
     if (status != EncoderStatus::READY){
-        return ControllerInitStatus::BAD_ENCODER;
+        return ElectronicSpeedControllerInitStatus::BAD_ENCODER;
     } else if (dir_pin_ < 0) || (pwm_pin_ < 0) || 
         (dir_pin_ > 28) || (pwm_pin_ > 28){
-        return ControllerInitStatus::BAD_CONFIG;
+        return ElectronicSpeedControllerInitStatus::BAD_CONFIG;
     }
 
     // init direction Pin
@@ -27,22 +27,22 @@ ElectronicSpeedController::ElectronicSpeedController(const ElectronicSpeedContro
 
     // Set level and mode
     write_output_pins();
-    mode_ = ControllerMode::ACTIVE;
+    mode_ = ElectronicSpeedControllerMode::ACTIVE;
 
-    return ControllerInitStatus::READY;
+    return ElectronicSpeedControllerInitStatus::READY;
 }
 
 void ElectronicSpeedController::execute(){
     encoder_.execute();
-    if (mode_ == ControllerMode::ACTIVE){
+    if (mode_ == ElectronicSpeedControllerMode::ACTIVE){
         calculate_pwm_and_direction();
         apply_limits();
-    } else if (mode_ == ControllerMode::LOCKOUT){
+    } else if (mode_ == ElectronicSpeedControllerMode::LOCKOUT){
         n_frames_lockout_++;
         if (n_frames_lockout_ > RESET_TIMOUT_FRAMES){
             n_frames_lockout_ = 0;
             n_frames_sat_ = 0;
-            mode_ = ControllerMode::ACTIVE;
+            mode_ = ElectronicSpeedControllerMode::ACTIVE;
         }
     }
     write_output_pins();
@@ -67,7 +67,7 @@ void ElectronicSpeedController::apply_limits(){
         if (n_frames_sat_ > SATURATION_TIMEOUT_FRAMES){
             pwm_cmd_ = 0;
             error_int_ = 0.0f;
-            mode_ = ControllerMode::LOCKOUT;
+            mode_ = ElectronicSpeedControllerMode::LOCKOUT;
         }
     }
 }

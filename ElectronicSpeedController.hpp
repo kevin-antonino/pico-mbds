@@ -1,22 +1,27 @@
 #include "QuadratureEncoder.hpp"
 
-class enum ControllerMode{ACTIVE, INACTIVE, LOCKOUT};
-class enum ControllerInitStatus{READY, BAD_ENCODER, BAD_CONFIG};
+class enum ElectronicSpeedControllerMode{ACTIVE, INACTIVE, LOCKOUT};
+class enum ElectronicSpeedControllerInitStatus{READY, BAD_ENCODER, BAD_CONFIG};
+
+typedef struct ElectronicSpeedControllerConfig{
+    uint pwm_pin;
+    uint dir_pin;
+}
 
 class ElectronicSpeedController{
     public:
         ElectronicSpeedController();
-        void initialize();
+        ElectronicSpeedControllerInitStatus initialize();
         void execute();
         void set_speed_command(float cmd_radps);
     
-   private:
-        void generate_pwm_command();
+    private:
+        void calculate_pwm_and_direction();
         void apply_limits();
-        void set_pwm_output();
+        void write_output_pins();
 
         QuadratureEncoder encoder_;
-        ControllerMode mode_{ControllerMode::INACTIVE}; 
+        ElectronicSpeedControllerMode mode_{ControllerMode::INACTIVE}; 
         float speed_cmd_radps_{0}; 
         uint pwm_cmd_{0};
         uint direction_{1};
@@ -25,8 +30,13 @@ class ElectronicSpeedController{
         uint n_frames_sat_{0};
         uint n_frames_lockout_{0};
 
-        // Config-dependent
+        // config
         uint pwm_pin_;
+        uint dir_pin_;
+
+        // Tuning Params
+        constexpr float KP = 1;
+        constexpr float KI = 0.1;
 
         // Motor Parameters
         static constexpr float SUPPLY_VOLTAGE_V = 5.0f; // Voltage of power supply
@@ -39,10 +49,6 @@ class ElectronicSpeedController{
         static constexpr float KM = STALL_TORQUE / REF_VOLTAGE_V;
         static constexpr float KB = REF_VOLTAGE_V / NO_LOAD_SPEED_radps; // Back EMF Constant
         static constexpr float KFF = KM * KB / I_MOTOR_kgm;
-
-        // Tuning Params
-        static constexpr float KP = 1;
-        static constexpr float KI = 0.1;
 
         // Timing
         static constexpr FREQ_Hz = 100;
