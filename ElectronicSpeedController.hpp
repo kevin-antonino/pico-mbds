@@ -1,17 +1,17 @@
 #include "QuadratureEncoder.hpp"
 
-class enum ElectronicSpeedControllerMode{ACTIVE, INACTIVE, LOCKOUT};
-class enum ElectronicSpeedControllerInitStatus{READY, BAD_ENCODER, BAD_CONFIG};
+class enum WheelSpeedControllerMode{ACTIVE, INACTIVE, LOCKOUT};
+class enum WheelSpeedControllerInitStatus{READY, BAD_ENCODER, BAD_CONFIG};
 
-typedef struct ElectronicSpeedControllerConfig{
+typedef struct WheelSpeedControllerConfig{
     uint pwm_pin;
     uint dir_pin;
 }
 
-class ElectronicSpeedController{
+class WheelSpeedController{
     public:
-        ElectronicSpeedController();
-        ElectronicSpeedControllerInitStatus initialize();
+        WheelSpeedController();
+        WheelSpeedControllerInitStatus initialize();
         void execute();
         void set_speed_command(float cmd_radps);
     
@@ -21,7 +21,7 @@ class ElectronicSpeedController{
         void write_output_pins();
 
         QuadratureEncoder encoder_;
-        ElectronicSpeedControllerMode mode_{ControllerMode::INACTIVE}; 
+        WheelSpeedControllerMode mode_{ControllerMode::INACTIVE}; 
         float speed_cmd_radps_{0}; 
         uint pwm_cmd_{0};
         uint direction_{1};

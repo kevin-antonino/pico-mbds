@@ -1,17 +1,17 @@
-#include "ElectronicSpeedController.hpp"
+#include "WheelSpeedController.hpp"
 
-ElectronicSpeedController::ElectronicSpeedController(const ElectronicSpeedControllerConfig& config){
+WheelSpeedController::WheelSpeedController(const WheelSpeedControllerConfig& config){
     pwm_pin_ = config.pwm_pin;
     dir_pin_ = config.dir_pin;
 }
 
- ElectronicSpeedControllerInitStatus ElectronicSpeedController::initialize(){
+ WheelSpeedControllerInitStatus WheelSpeedController::initialize(){
     EncoderStatus encoder_status = encoder_.initialize();
     if (status != EncoderStatus::READY){
-        return ElectronicSpeedControllerInitStatus::BAD_ENCODER;
+        return WheelSpeedControllerInitStatus::BAD_ENCODER;
     } else if (dir_pin_ < 0) || (pwm_pin_ < 0) || 
         (dir_pin_ > 28) || (pwm_pin_ > 28){
-        return ElectronicSpeedControllerInitStatus::BAD_CONFIG;
+        return WheelSpeedControllerInitStatus::BAD_CONFIG;
     }
 
     // init direction Pin
@@ -27,28 +27,28 @@ ElectronicSpeedController::ElectronicSpeedController(const ElectronicSpeedContro
 
     // Set level and mode
     write_output_pins();
-    mode_ = ElectronicSpeedControllerMode::ACTIVE;
+    mode_ = WheelSpeedControllerMode::ACTIVE;
 
-    return ElectronicSpeedControllerInitStatus::READY;
+    return WheelSpeedControllerInitStatus::READY;
 }
 
-void ElectronicSpeedController::execute(){
+void WheelSpeedController::execute(){
     encoder_.execute();
-    if (mode_ == ElectronicSpeedControllerMode::ACTIVE){
+    if (mode_ == WheelSpeedControllerMode::ACTIVE){
         calculate_pwm_and_direction();
         apply_limits();
-    } else if (mode_ == ElectronicSpeedControllerMode::LOCKOUT){
+    } else if (mode_ == WheelSpeedControllerMode::LOCKOUT){
         n_frames_lockout_++;
         if (n_frames_lockout_ > RESET_TIMOUT_FRAMES){
             n_frames_lockout_ = 0;
             n_frames_sat_ = 0;
-            mode_ = ElectronicSpeedControllerMode::ACTIVE;
+            mode_ = WheelSpeedControllerMode::ACTIVE;
         }
     }
     write_output_pins();
 }
 
-void ElectronicSpeedController::calculate_pwm_and_direction(){
+void WheelSpeedController::calculate_pwm_and_direction(){
     const float motor_cmd_V, duty;
     error_ = speed_cmd_radps_ - encoder_.get_wheel_speed();
     motor_cmd_V = KP*error_ + KI*error_int_ + KFF*speed_cmd_radps_;
@@ -57,7 +57,7 @@ void ElectronicSpeedController::calculate_pwm_and_direction(){
     pwm_cmd_ = static_cast<uint>(duty * PWM_COUNTS_PER_CYCLE);
 }
 
-void ElectronicSpeedController::apply_limits(){
+void WheelSpeedController::apply_limits(){
     if (pwm_cmd_ < MAX_PWM){
         error_int_ += error_ * DELTA_TIME; 
         n_frames_sat_ = 0;
@@ -67,12 +67,12 @@ void ElectronicSpeedController::apply_limits(){
         if (n_frames_sat_ > SATURATION_TIMEOUT_FRAMES){
             pwm_cmd_ = 0;
             error_int_ = 0.0f;
-            mode_ = ElectronicSpeedControllerMode::LOCKOUT;
+            mode_ = WheelSpeedControllerMode::LOCKOUT;
         }
     }
 }
 
-void ElectronicSpeedController::set_speed_command(float cmd){
+void WheelSpeedController::set_speed_command(float cmd){
     if (fabsf(cmd) > MAX_SPEED_CMD_radps){
         speed_cmd_radps_ = MAX_SPEED_CMD_radps;
     } else {
@@ -81,7 +81,7 @@ void ElectronicSpeedController::set_speed_command(float cmd){
     // put a rate limit here?
 }
 
-void ElectronicSpeedController::write_output_pins(){
+void WheelSpeedController::write_output_pins(){
     gpio_put(dir_pin_, direction_);
     pwm_set_gpio_level(pwm_pin_, pwm_cmd_);
 }
