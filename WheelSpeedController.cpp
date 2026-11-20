@@ -1,16 +1,12 @@
 #include "WheelSpeedController.hpp"
-
-WheelSpeedController::WheelSpeedController(const WheelSpeedControllerConfig& config){
-    pwm_pin_ = config.pwm_pin;
-    dir_pin_ = config.dir_pin;
-}
+#include <math.h>
 
  WheelSpeedControllerInitStatus WheelSpeedController::initialize(){
-    EncoderStatus encoder_status = encoder_.initialize();
-    if (status != EncoderStatus::READY){
+    QuadratureEncoderInitStatus encoder_status = encoder_.initialize();
+    if (encoder_status != QuadratureEncoderInitStatus::READY){
         return WheelSpeedControllerInitStatus::BAD_ENCODER;
-    } else if (dir_pin_ < 0) || (pwm_pin_ < 0) || 
-        (dir_pin_ > 28) || (pwm_pin_ > 28){
+    } else if (((dir_pin_ < 0) || (pwm_pin_ < 0)) || 
+        ((dir_pin_ > 28) || (pwm_pin_ > 28))){
         return WheelSpeedControllerInitStatus::BAD_CONFIG;
     }
 
@@ -49,7 +45,7 @@ void WheelSpeedController::execute(){
 }
 
 void WheelSpeedController::calculate_pwm_and_direction(){
-    const float motor_cmd_V, duty;
+    float motor_cmd_V{0}, duty{0};
     error_ = speed_cmd_radps_ - encoder_.get_wheel_speed();
     motor_cmd_V = KP*error_ + KI*error_int_ + KFF*speed_cmd_radps_;
     duty = fminf(fabsf(motor_cmd_V) / SUPPLY_VOLTAGE_V, 1.0f);
@@ -84,4 +80,19 @@ void WheelSpeedController::set_speed_command(float cmd){
 void WheelSpeedController::write_output_pins(){
     gpio_put(dir_pin_, direction_);
     pwm_set_gpio_level(pwm_pin_, pwm_cmd_);
+}
+
+WheelSpeedControllerTelemetry WheelSpeedController::get_telemetry() const {
+    WheelSpeedControllerTelemetry telem_struct{}; 
+    telem_struct.wheel_speed_radps  = encoder_.get_wheel_speed();
+    telem_struct.mode               = mode_;
+    telem_struct.speed_cmd_radps    = speed_cmd_radps_; 
+    telem_struct.pwm_cmd            = pwm_cmd_; 
+    telem_struct.direction          = direction_;
+    telem_struct.error              = error_; 
+    telem_struct.error_int          = error_int_; 
+    telem_struct.n_frames_sat       = n_frames_sat_; 
+    telem_struct.n_frames_lockout   = n_frames_lockout_; 
+
+    return telem_struct;
 }

@@ -6,9 +6,9 @@
 #include "hardware/pio.h"
 #include "hardware/timer.h"
 
-enum class EncoderInitStatus {READY, TOO_MANY_ENCODERS, NO_STATE_MACHINE, BAD_PIN};
+enum class QuadratureEncoderInitStatus {READY, TOO_MANY_ENCODERS, NO_STATE_MACHINE, BAD_PIN};
 
-typedef struct {
+typedef struct QuadratureEncoderConfig{
     uint encoder_AB_pin; // Location of Pin A. Pin B = Pin A + 1
     uint calibration_data[4]; // relative phase sizes
     bool invert;
@@ -34,8 +34,8 @@ typedef struct substep_state_t {
 
 class QuadratureEncoder{
     public:
-        QuadratureEncoder(const QuadratureEncoderConfig& config);
-        EncoderInitStatus initialize();
+        explicit QuadratureEncoder(const QuadratureEncoderConfig& config);
+        QuadratureEncoderInitStatus initialize();
         void execute();
         float get_wheel_speed() const { return wheel_speed_radps_; }
         substep_state_t get_state() const { return state_; }

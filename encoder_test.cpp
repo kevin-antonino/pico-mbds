@@ -23,8 +23,8 @@ int main() {
     gpio_put(VCC_PIN, 1);
 
     QuadratureEncoder encoder(config);
-    EncoderStatus status = encoder.initialize();
-    if (status != EncoderStatus::Ready) {
+    QuadratureEncoderInitStatus status = encoder.initialize();
+    if (status != QuadratureEncoderInitStatus::READY) {
         printf("encoder init failed: %d\n", static_cast<int>(status));
         while (true) tight_loop_contents();
     }

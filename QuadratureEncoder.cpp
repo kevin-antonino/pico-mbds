@@ -16,7 +16,7 @@ QuadratureEncoder::QuadratureEncoder(const QuadratureEncoderConfig& config){
     }
 }
 
-EncoderStatus QuadratureEncoder::initialize() {
+QuadratureEncoderInitStatus QuadratureEncoder::initialize() {
     int forward;
 
     // Figure out which state machine to use
@@ -28,7 +28,7 @@ EncoderStatus QuadratureEncoder::initialize() {
     } else if (encoder_number_ < 8){
         pio_block_ = pio1;
     } else {
-        return EncoderStatus::TOO_MANY_ENCODERS;
+        return QuadratureEncoderInitStatus::TOO_MANY_ENCODERS;
     }
     
     // Claim PIO Block & state_machines if unclaimed
@@ -40,7 +40,7 @@ EncoderStatus QuadratureEncoder::initialize() {
                 // claim all SMs to be used by this program
                 pio_sm_claim(pio_block_, i);
             } else {
-                return EncoderStatus::NO_STATE_MACHINE;
+                return QuadratureEncoderInitStatus::NO_STATE_MACHINE;
             }
         }
     }
@@ -62,7 +62,7 @@ EncoderStatus QuadratureEncoder::initialize() {
     state_.prev_low = get_step_start_transition_pos(state_.raw_step);
     state_.prev_high = get_step_start_transition_pos(state_.raw_step + 1);
 
-    return EncoderStatus::READY;
+    return QuadratureEncoderInitStatus::READY;
 }
 
 // read the PIO data and update the speed / position estimate

@@ -15,8 +15,9 @@ pico_sdk_init()
 
 # rest of your project
 add_executable(pico-esc
-    main.cpp
+    controller_test.cpp
     QuadratureEncoder.cpp
+    WheelSpeedController.cpp
 )
 
 # Pio program
