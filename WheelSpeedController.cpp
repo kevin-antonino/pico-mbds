@@ -1,13 +1,16 @@
 #include "WheelSpeedController.hpp"
 #include <math.h>
 
- WheelSpeedControllerInitStatus WheelSpeedController::initialize(){
-    QuadratureEncoderInitStatus encoder_status = encoder_.initialize();
+ WheelSpeedControllerInitStatus WheelSpeedController::initialize(const WheelSpeedControllerConfig& config){
+    QuadratureEncoderInitStatus encoder_status = encoder_.initialize(config.encoder_config);
     if (encoder_status != QuadratureEncoderInitStatus::READY){
         return WheelSpeedControllerInitStatus::BAD_ENCODER;
     } else if (((dir_pin_ < 0) || (pwm_pin_ < 0)) || 
         ((dir_pin_ > 28) || (pwm_pin_ > 28))){
-        return WheelSpeedControllerInitStatus::BAD_CONFIG;
+        return WheelSpeedControllerInitStatus::BAD_PIN;
+    } else {
+        pwm_pin_ = config.pwm_pin; // not the best check but it will do for now
+        dir_pin_ = config.dir_pin; 
     }
 
     // init direction Pin
@@ -45,6 +48,13 @@ void WheelSpeedController::execute(){
     write_output_pins();
 }
 
+void WheelSpeedController::lockout(){
+    n_frames_lockout_ = 0;
+    pwm_cmd_ = 0;
+    error_int_ = 0.0f; // Reset integrator
+    mode_ = WheelSpeedControllerMode::LOCKOUT; 
+}
+
 void WheelSpeedController::calculate_pwm_and_direction(){
     float motor_cmd_V{0}, duty{0};
     motor_cmd_V = KP*error_ + KI*error_int_ + KFF*speed_cmd_radps_;
@@ -60,9 +70,7 @@ void WheelSpeedController::limit_output(){
         pwm_cmd_ = MAX_PWM;
         n_frames_sat_++;  
         if (n_frames_sat_ > SATURATION_TIMEOUT_FRAMES){
-            pwm_cmd_ = 0;
-            error_int_ = 0.0f; // Reset integrator
-            mode_ = WheelSpeedControllerMode::LOCKOUT; // Kick controller into lockout
+            lockout(); // Kick controller into lockout mode
         }
     }
 }

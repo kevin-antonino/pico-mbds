@@ -4,25 +4,29 @@
 #include "hardware/gpio.h"
 #include "hardware/sync.h"
 
-QuadratureEncoder::QuadratureEncoder(const QuadratureEncoderConfig& config){
+QuadratureEncoder::QuadratureEncoder(){
     n_encoders_++;
     encoder_number_ = n_encoders_ - 1; // Zero indexed 
+}
+
+QuadratureEncoderInitStatus QuadratureEncoder::initialize(const QuadratureEncoderConfig& config) {
+    int forward;
 
     // Handle configuration data
     invert_ = config.invert;
-    encoder_AB_pin_ = config.encoder_AB_pin;
+
+    if ((config.encoder_AB_pin < 0) || (config.encoder_AB_pin > 28)){
+        return QuadratureEncoderInitStatus::BAD_PIN;
+    } else {
+        encoder_AB_pin_ = config.encoder_AB_pin;
+    }
+
     for (int i{}; i < 4; ++i){
         state_.calibration_data[i] = config.calibration_data[i];
     }
-}
 
-QuadratureEncoderInitStatus QuadratureEncoder::initialize() {
-    int forward;
-
-    // Figure out which state machine to use
+    // Figure out which state machine and PIO block to use
     state_machine_ = encoder_number_ % 4; 
-
-    // Figure out which PIO block to use
     if (encoder_number_ < 4){
         pio_block_ = pio0;
     } else if (encoder_number_ < 8){
@@ -45,8 +49,6 @@ QuadratureEncoderInitStatus QuadratureEncoder::initialize() {
         }
     }
 
-    // TODO: at check for pin in some range
-    
     // start "stopped" so that we don't use stale data to compute speeds
     state_.stopped = 1;
 

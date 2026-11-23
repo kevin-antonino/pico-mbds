@@ -2,7 +2,7 @@
 #include "hardware/pwm.h"
 
 enum class WheelSpeedControllerMode{ACTIVE, INACTIVE, LOCKOUT};
-enum class WheelSpeedControllerInitStatus{READY, BAD_ENCODER, BAD_CONFIG};
+enum class WheelSpeedControllerInitStatus{READY, BAD_ENCODER, BAD_PIN};
 
 typedef struct WheelSpeedControllerConfig{
     uint pwm_pin;
@@ -24,12 +24,13 @@ typedef struct WheelSpeedControllerTelemetry{
 
 class WheelSpeedController{
     public:
-        explicit WheelSpeedController(const WheelSpeedControllerConfig& config) :
-            pwm_pin_(config.pwm_pin), dir_pin_(config.dir_pin), encoder_(config.encoder_config) {}
-        WheelSpeedControllerInitStatus initialize();
+        WheelSpeedController() = default;
+        WheelSpeedControllerInitStatus initialize(const WheelSpeedControllerConfig& config);
         void execute();
         void set_speed_command(float cmd_radps);
+        WheelSpeedControllerMode get_mode() const { return mode_; };
         WheelSpeedControllerTelemetry get_telemetry() const;
+        void lockout();
     
     private:
         void calculate_pwm_and_direction();

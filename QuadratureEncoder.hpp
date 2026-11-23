@@ -34,8 +34,8 @@ typedef struct substep_state_t {
 
 class QuadratureEncoder{
     public:
-        explicit QuadratureEncoder(const QuadratureEncoderConfig& config);
-        QuadratureEncoderInitStatus initialize();
+        explicit QuadratureEncoder();
+        QuadratureEncoderInitStatus initialize(const QuadratureEncoderConfig& config);
         void execute();
         float get_wheel_speed() const { return wheel_speed_radps_; }
         substep_state_t get_state() const { return state_; }
